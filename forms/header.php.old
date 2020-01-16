@@ -1,0 +1,164 @@
+<?php
+session_start();
+
+if (isset($_SESSION['LAST_ACTIVITY']) && (time() - $_SESSION['LAST_ACTIVITY'] > 1800)) {
+    session_unset();
+    session_destroy();
+}
+$_SESSION['LAST_ACTIVITY'] = time();
+if (!isset($_SESSION['user_id'])) {
+    header('Location: ../index.php');
+    exit;
+}
+
+include_once '../inc/db.php';
+include_once 'functions.php';
+$userid = $_SESSION['user_id'];
+$db->where('id', $userid);
+$user = $db->getOne('users');
+
+$db->where('userid', $userid)->orderBy('timestamp', 'DESC');
+$lastlogin = $db->get('logins',array(1,1));
+if (is_array($lastlogin)) {
+    $lastlogin = $lastlogin[0];
+}
+$db->join("user_site_allocation u", "s.id = u.siteid");
+$db->joinWhere("user_site_allocation u","u.userid", $userid);
+$site = $db->getOne("sites s", null, "s.*");
+
+$filename = basename($_SERVER['PHP_SELF']); 
+
+?>
+<!doctype html>
+<html lang="en">
+
+<head>
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css" integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
+
+    <!-- <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous"> -->
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css">
+    <!-- <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css"> -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.10.20/css/dataTables.bootstrap4.min.css">
+    <link rel="stylesheet" href="../res/saurabh.css">
+    <link rel="stylesheet" href="../res/dashboard.css">
+    <link rel="stylesheet" href="../res/toastr/toastr.min.css">
+    <title>CRF</title>
+</head>
+
+<body>
+    <nav class="navbar navbar-dark fixed-top bg-dark flex-md-nowrap p-0 shadow">
+        <a class="navbar-brand col-sm-3 col-md-2 mr-0" href="#">
+            <img src="../res/img/QdataEDCLite.png" class="d-inline-block align-top" style="border-radius: 10px; height:50px;" alt="QDataEDC LITE" />
+        </a>
+        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#sidebar" aria-controls="sidebar" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <ul class="nav  px-3">
+            <li class="nav-item dropdown">
+                <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" >
+                <i class="fa fa-user-circle-o" aria-hidden="true"></i> <?php echo $user['name']; ?>
+                </a>
+                <div class="dropdown-menu dropdown-menu-right">
+                    
+                    <button class="dropdown-item" href="#" data-toggle="modal" data-target="#password_modal">
+                    <span data-feather="edit"></span>      
+                    Change Password</button>
+                    <div class="dropdown-divider"></div>
+                    <a class="dropdown-item" href="../logout.php">
+                        <span data-feather="log-out"></span>    
+                    Logout</a>
+                    <div class="dropdown-divider"></div>
+                    <span class="dropdown-item-text" >Last Login: <?php echo date('d-M-Y H:i:s', strtotime($lastlogin['timestamp'])); ?></span>
+                </div>
+            </li>
+        </ul>
+    </nav>
+    <div class="container-fluid">
+        <div class="row">
+            <nav class="col-md-2 d-none d-md-block bg-light collapse sidebar-collapse sidebar sidepanel" id="sidebar">
+                <div class="sidebar-sticky">
+                    <h3 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
+                        <?php echo $site['name']; ?>
+                    </h3>
+                    <ul class="nav flex-column">
+                        <li class="nav-item">
+                            <a class="nav-link <?php echo ($filename === 'home.php')? 'active': ''; ?> " href="../home.php">
+                                <span data-feather="home"></span>
+                                Dashboard <span class="sr-only">(current)</span>
+                            </a>
+                        </li>
+                    </ul>
+                        <?php if (!empty($_SESSION['studyid'])) { 
+                            $db->where("id", $_SESSION['studyid']);
+                            $study = $db->getOne('studies');
+                            if ($study) { ?>
+                            <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
+                            <span><?php echo $study['name'];   ?> </span>
+                            <a class="d-flex align-items-center text-muted" title="Change Study" href="../reset-study.php">
+                                <span data-feather="edit"></span> <span class="sr-only">Change Study</span>
+                            </a>
+                            </h6>
+                            <ul class="nav flex-column mb-2">
+                                <?php 
+                                $db->where("studyid", $study['id'])->orderBy('sequence', 'ASC');
+                                $forms = $db->get('crfs');
+                                foreach($forms as $form) {
+                                ?>
+                                <li class="nav-item">
+                                    <a class="nav-link <?php echo ($filename === $form['filename'])? 'active': ''; ?> " href="<?php echo $form['filename']; ?>">
+                                    <span data-feather="file-text"></span>    
+                                    <?php echo $form['title']; ?></a>
+                                </li>
+                                
+                                <?php } ?>
+                            </ul>
+                        
+                        <?php }
+                        } ?>
+                    
+                    
+                </div>
+               
+            </nav>
+
+<div class="modal fade" id="password_modal" tabindex="-1" role="dialog" aria-hidden="true">
+<div class="modal-dialog" role="document">
+    <form action="../password-reset.php" method="post">
+        <input type="hidden" name="userid" value="<?php echo $userid; ?>">
+    <div class="modal-content">
+    <div class="modal-header">
+        <h3>Change Password <span class="extra-title muted"></span></h3>
+    </div>
+    <div class="modal-body form-horizontal">
+        <div class="control-group">
+            <label class="control-label" for="current_password">Current Password</label>
+            <div class="controls">
+                <input name="current_password" type="password">
+            </div>
+        </div>
+        <div class="control-group">
+            <label class="control-label" for="new_password">New Password</label>
+            <div class="controls">
+                <input name="new_password" type="password">
+            </div>
+        </div>
+        <div class="control-group">
+            <label class="control-label" for="confirm_password">Confirm Password</label>
+            <div class="controls">
+                <input name="confirm_password" type="password">
+            </div>
+        </div>      
+    </div>
+    <div class="modal-footer">
+        <button class="btn btn-secondary" aria-hidden="true" href="#" data-dismiss="modal">Close</button>
+        <button type="submit" class="btn btn-primary" id="password_modal_save" >Save changes</button>
+    </div>
+    </div>
+    </form>
+    </div>
+</div>
